@@ -15,7 +15,7 @@ contract PresaleFundraiser is Ownable, ReentrancyGuard {
         address signer;
     }
 
-    // Tracks contributions by user (handles edge case user may submit more than once)
+    // Tracks contributions by user
     mapping(address => ContributionRecord[]) public contributions;
 
     // Tracks total contribution per token (e.g. USDC, USDT)
@@ -23,6 +23,9 @@ contract PresaleFundraiser is Ownable, ReentrancyGuard {
 
     // Tracks all contributors who used a given referral code
     mapping(bytes32 => address[]) public referralToContributors;
+
+    // Tracks all unique contributors
+    address[] public contributorList;
 
     event Contributed(
         address indexed contributor,
@@ -69,7 +72,11 @@ contract PresaleFundraiser is Ownable, ReentrancyGuard {
         totalPerToken[token] += amount;
         referralToContributors[hashedReferral].push(msg.sender);
 
-        // emit events for records
+        // Track unique contributors
+        if (contributions[msg.sender].length == 1) {
+            contributorList.push(msg.sender);
+        }
+
         emit Contributed(
             msg.sender,
             token,
@@ -102,7 +109,7 @@ contract PresaleFundraiser is Ownable, ReentrancyGuard {
     // View Functions
     // ----------------------------
 
-    function getContributionCount(address user) external view returns (uint256) {
+    function getContributorCountByAddress(address user) external view returns (uint256) {
         return contributions[user].length;
     }
 
@@ -154,5 +161,45 @@ contract PresaleFundraiser is Ownable, ReentrancyGuard {
         returns (address[] memory)
     {
         return referralToContributors[referralHash];
+    }
+
+    function getTotalUniqueContributors() external view returns (uint256) {
+        return contributorList.length;
+    }
+
+    /**
+     * @notice Returns all contributions from a user between two timestamps
+     * @param user The user to check
+     * @param startTimestamp Minimum timestamp (inclusive)
+     * @param endTimestamp Maximum timestamp (inclusive)
+     */
+    function getContributionsInTimeRange(
+        address user,
+        uint256 startTimestamp,
+        uint256 endTimestamp
+    ) external view returns (ContributionRecord[] memory results) {
+        ContributionRecord[] storage userRecords = contributions[user];
+        uint256 count = 0;
+
+        for (uint256 i = 0; i < userRecords.length; i++) {
+            if (
+                userRecords[i].timestamp >= startTimestamp &&
+                userRecords[i].timestamp <= endTimestamp
+            ) {
+                count++;
+            }
+        }
+
+        results = new ContributionRecord[](count);
+        uint256 index = 0;
+        for (uint256 i = 0; i < userRecords.length; i++) {
+            if (
+                userRecords[i].timestamp >= startTimestamp &&
+                userRecords[i].timestamp <= endTimestamp
+            ) {
+                results[index] = userRecords[i];
+                index++;
+            }
+        }
     }
 }
